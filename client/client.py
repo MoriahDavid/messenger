@@ -1,3 +1,5 @@
+from consts import MsgTypes, MsgKeys
+
 
 class Client:
     def __init__(self):
