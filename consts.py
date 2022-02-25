@@ -5,14 +5,15 @@ USERNAME_LEN = 20
 SERVER_PORT = 55000
 
 
-class MsgKeys(Enum):
+class MsgKeys(str, Enum):
     TYPE = "Type"
     USERNAME = "username"
     MSG = "msg"
     TO = "to"
+    STATUS = "status"
 
 
-class MsgTypes(Enum):
+class MsgTypes(int, Enum):
     CONNECT = 1
     DISCONNECT = 2
     SEND_MSG = 3
@@ -20,13 +21,13 @@ class MsgTypes(Enum):
     GET_ALL_FILES = 5
     FILE_DOWNLOAD_REQ = 6
     FILE_DOWNLOAD = 7
-    CONNECT_SUCCESS = 8
-    DISCONNECT_SUCCESS = 9
-    SEND_MSG_SUCCESS = 10
-    GET_ALL_CLIENTS_SUCCESS = 11
-    GET_ALL_FILES_SUCCESS = 12
-    FILE_DOWNLOAD_REQ_SUCCESS = 13
-    FILE_DOWNLOAD_SUCCESS = 14
+    CONNECT_RESPONSE = 8
+    DISCONNECT_RESPONSE = 9
+    SEND_MSG_RESPONSE = 10
+    GET_ALL_CLIENTS_RESPONSE = 11
+    GET_ALL_FILES_RESPONSE = 12
+    FILE_DOWNLOAD_REQ_RESPONSE = 13
+    FILE_DOWNLOAD_RESPONSE = 14
 
 
 
