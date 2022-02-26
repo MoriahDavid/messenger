@@ -3,6 +3,7 @@ from enum import Enum
 BUFF_SIZE = 1024
 USERNAME_LEN = 20
 SERVER_PORT = 55000
+RESPONSE_TIMEOUT = 4
 
 
 class MsgKeys(str, Enum):
@@ -10,6 +11,7 @@ class MsgKeys(str, Enum):
     USERNAME = "username"
     MSG = "msg"
     TO = "to"
+    FROM = "from"
     STATUS = "status"
 
 
