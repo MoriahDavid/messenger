@@ -11,11 +11,12 @@ import common
 
 
 class Client:
+
     def __init__(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock = None
         self.is_connected = False
         self._all_clients = None
-
+        self.new_msg_gui_function = None
     def _listen_to_server_req(self):
         while self.is_connected:
             inputs, outputs, errors = select.select([self.sock], [], [], 0)
@@ -32,8 +33,14 @@ class Client:
                 elif r_type == MsgTypes.GET_ALL_CLIENTS_RESPONSE:
                     self._all_clients = d.get(MsgKeys.MSG)
 
+    def set_gui_new_msg_function(self, func):
+        self.new_msg_gui_function = func
+
     def display_msg(self, sender_name, msg):
         print(f"{sender_name}: {msg}")
+
+        if self.new_msg_gui_function:
+            self.new_msg_gui_function(sender_name, msg)
 
     def connect(self, username, server_ip, server_port):
         """
@@ -45,6 +52,7 @@ class Client:
         """
         # try because the server could not running
         try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((server_ip, server_port))  # connect to the server
         except ConnectionRefusedError:
             return False
@@ -96,12 +104,12 @@ class Client:
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_FILES}
         self.sock.sendall(common.pack_json(d))
 
-    def _file_download_req(self):
-        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_REQ}
-        self.sock.sendall(common.pack_json(d))
-
     def file_download(self, file_name):
         d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD}
+        self.sock.sendall(common.pack_json(d))
+
+    def _file_download_req(self):
+        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_REQ}
         self.sock.sendall(common.pack_json(d))
 
 
