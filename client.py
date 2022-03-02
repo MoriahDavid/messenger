@@ -17,6 +17,7 @@ class Client:
         self.is_connected = False
         self._all_clients = None
         self.new_msg_gui_function = None
+
     def _listen_to_server_req(self):
         while self.is_connected:
             inputs, outputs, errors = select.select([self.sock], [], [], 0)

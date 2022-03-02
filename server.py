@@ -1,9 +1,10 @@
-import struct
 import time
 import json
+import struct
 import select
 import socket
 import threading
+
 from consts import MsgTypes, MsgKeys
 import consts
 import common
@@ -27,6 +28,7 @@ class Server:
         thread_clients_req = threading.Thread(target=self._listen_to_clients_req)
         thread_clients_req.start()
 
+    # connect
     def _listen_to_new_clients(self):
         """
         listen to new clients connect requests
@@ -57,6 +59,7 @@ class Server:
                     client_socket.send(common.pack_json(d))
                     self.clients_uname_sock[username] = client_socket
                     print(f"{username} connected")
+                    self.send_msg_to_all_clients(f"{username} connected")
 
     def _listen_to_clients_req(self):
         while self.is_running:
@@ -90,18 +93,25 @@ class Server:
                     elif r_type == MsgTypes.GET_ALL_FILES:
                         pass
 
+    # disconnect
     def disconnect_client(self, client_socket):
+        disconnect_username = self.get_username_by_socket(client_socket)
         # delete this client from the dict
-        for k in self.clients_uname_sock.keys():
-            if self.clients_uname_sock.get(k) == client_socket:
-                self.clients_uname_sock.pop(k)
-                break
+        self.clients_uname_sock.pop(disconnect_username)
         d = {MsgKeys.TYPE: MsgTypes.DISCONNECT_RESPONSE, MsgKeys.STATUS: True}
         try:
             client_socket.send(common.pack_json(d))
         except ConnectionResetError:
             pass
         client_socket.close()
+        self.send_msg_to_all_clients(f"{disconnect_username} disconnected")
+
+    def send_msg_to_all_clients(self, msg):
+        d = {MsgKeys.TYPE: MsgTypes.SEND_MSG, MsgKeys.MSG: msg, MsgKeys.FROM: "Server"}
+        socks = list(self.clients_uname_sock.values())  # all sockets of all clients
+
+        for sock in socks:
+            sock.send(common.pack_json(d))
 
     def send_msg(self, d, sender_socket):
         to = d.get(MsgKeys.TO)
