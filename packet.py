@@ -24,7 +24,7 @@ class DataPacket:
 
     def pack(self):
         length = len(self.data)
-        checksum = calc_checksum()
+        checksum = calc_checksum(self.data)
 
         p = struct.pack(self.PACKET_FORMAT, self.seq_num, checksum, length, self.total_packets)
         p = p + self.data
