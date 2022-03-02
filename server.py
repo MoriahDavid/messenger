@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import struct
@@ -8,6 +9,7 @@ import threading
 from consts import MsgTypes, MsgKeys
 import consts
 import common
+from fast_reliable_udp import Sender
 
 
 class Server:
@@ -18,6 +20,7 @@ class Server:
         self.sock.bind(('', listen_port))
         self.sock.listen()
         self.is_running = True
+        self.available_ports = {num: True for num in range(55000, 55016)}
 
     def run(self):
         """
@@ -27,6 +30,16 @@ class Server:
         thread_new_clients.start()
         thread_clients_req = threading.Thread(target=self._listen_to_clients_req)
         thread_clients_req.start()
+
+    def get_available_port(self):
+        first_port = None
+        for port_num, is_available in self.available_ports:
+            if is_available:
+                first_port = port_num
+                self.available_ports[port_num] = False
+                break
+
+        return first_port
 
     # connect
     def _listen_to_new_clients(self):
@@ -86,12 +99,42 @@ class Server:
                         self.send_msg(d, client_sock)
                     elif r_type == MsgTypes.GET_ALL_CLIENTS:
                         self.get_all_clients(client_sock)
-                    elif r_type == MsgTypes.FILE_DOWNLOAD_REQ:
-                        pass
                     elif r_type == MsgTypes.FILE_DOWNLOAD:
-                        pass
+                        thread_down_f = threading.Thread(target=self.download_file, args=(client_sock, d))
+                        thread_down_f.start()
                     elif r_type == MsgTypes.GET_ALL_FILES:
-                        pass
+                        self.get_all_files(client_sock)
+
+    def download_file(self, client_socket, d):
+        file_name = d.get(MsgKeys.MSG)
+
+        port = self.get_available_port()
+        if port is None or not os.path.exists(file_name):  # there is not available port or the file is not exist
+            # cant download file
+            d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: False, MsgKeys.MSG: "Not Available"}
+            client_socket.send(common.pack_json(d))  # sent to client socket
+            return
+
+        sender = Sender(port)
+
+        # Read the content of the file
+        with open(file_name, "rb") as f:
+            data = f.read()
+
+        sender.create_packets(data)
+
+        # send to the client response with the port number
+        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: True, MsgKeys.MSG: port}
+        client_socket.send(common.pack_json(d))  # sent to client socket
+        sender.send()
+
+        # finally make the port available again
+        self.available_ports[port] = True
+
+    def get_all_files(self, client_socket):
+        files_names = os.listdir(consts.FILES_FOLDER_NAME)
+        d = {MsgKeys.TYPE: MsgTypes.GET_ALL_FILES_RESPONSE, MsgKeys.MSG: files_names}
+        client_socket.send(common.pack_json(d))  # sent to client socket- all files
 
     # disconnect
     def disconnect_client(self, client_socket):

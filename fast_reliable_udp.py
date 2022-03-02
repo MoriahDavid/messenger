@@ -10,9 +10,8 @@ import packet
 
 
 class Sender:
-    def __init__(self, address, port):
+    def __init__(self, port):
         self.packets = {}  # seq_num : packet obj
-        self.address = address
         self.port = port
         self.sock = None
         self.is_running = False

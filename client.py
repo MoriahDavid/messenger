@@ -6,6 +6,7 @@ import socket
 import time
 
 from consts import MsgTypes, MsgKeys
+from fast_reliable_udp import Receiver
 import consts
 import common
 
@@ -16,7 +17,11 @@ class Client:
         self.sock = None
         self.is_connected = False
         self._all_clients = None
+        self.server_ip = None
         self.new_msg_gui_function = None
+        self._download_file_response = None
+        self._all_files = None
+        self.receiver = None
 
     def _listen_to_server_req(self):
         while self.is_connected:
@@ -33,6 +38,10 @@ class Client:
                     self.display_msg(sender_name, msg)
                 elif r_type == MsgTypes.GET_ALL_CLIENTS_RESPONSE:
                     self._all_clients = d.get(MsgKeys.MSG)
+                elif r_type == MsgTypes.GET_ALL_FILES_RESPONSE:
+                    self._all_clients = d.get(MsgKeys.MSG)
+                elif r_type == MsgTypes.FILE_DOWNLOAD_RESPONSE:
+                    self._download_file_response = d
 
     def set_gui_new_msg_function(self, func):
         self.new_msg_gui_function = func
@@ -55,6 +64,7 @@ class Client:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((server_ip, server_port))  # connect to the server
+            self.server_ip = server_ip
         except ConnectionRefusedError:
             return False
 
@@ -104,14 +114,39 @@ class Client:
     def get_all_files(self):
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_FILES}
         self.sock.sendall(common.pack_json(d))
+        st = time.time()
+        while self._all_files is None and time.time() - st <= consts.RESPONSE_TIMEOUT:
+            time.sleep(0.1)
+        r = self._all_files
+        self._all_files = None
+        return r
 
-    def file_download(self, file_name):
-        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD}
+    def file_download(self, file_name, save_to):
+        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD, MsgKeys.MSG: file_name}
         self.sock.sendall(common.pack_json(d))
+        st = time.time()
+        while self._download_file_response is None and time.time() - st <= consts.RESPONSE_TIMEOUT:
+            time.sleep(0.1)
+        r = self._download_file_response
+        self._download_file_response = None
+        if not r.get(MsgKeys.STATUS):
+            pass  # TODO: cant download
+        else:
+            port = r.get(MsgKeys.MSG)
+            self.receiver = Receiver(self.server_ip, port, save_to)
+            self.receiver.receive()  # TODO: print return value to the screen
 
-    def _file_download_req(self):
-        d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_REQ}
-        self.sock.sendall(common.pack_json(d))
+    def pause_download(self):
+        if self.receiver:
+            self.receiver.ask_for_pause()
+
+    def continue_download(self):
+        if self.receiver:
+            self.receiver.ask_for_continue()
+
+    def stop_download(self):
+        if self.receiver:
+            self.receiver.ask_for_stop()
 
 
 def main():
