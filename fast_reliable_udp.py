@@ -16,6 +16,8 @@ class Sender:
         self.port = port
         self.sock = None
         self.is_running = False
+        self.is_pause = False
+        self.is_stop = False
 
     def create_packets(self, data: bytes):
         data_len = len(data)
@@ -36,21 +38,32 @@ class Sender:
         self.sock.bind(("", self.port))  # relates this socket  to all networks and port
 
         received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive syn
-        seq_num, response_type = struct.unpack(packet.AckPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if response_type == packet.AckPacket.TYPE_SYN:  # like except
-            data = packet.AckPacket(0, packet.AckPacket.TYPE_SYN_ACK).pack()  # create synack packet
+        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
+        if response_type == packet.InfoPacket.TYPE_SYN:  # like except
+            data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN_ACK).pack()  # create synack packet
             self.sock.sendto(data, address)  # send the packet
         else:
             return
         received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive ack
-        seq_num, response_type = struct.unpack(packet.AckPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if not response_type == packet.AckPacket.TYPE_ACK:  # like except
+        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
+        if not response_type == packet.InfoPacket.TYPE_ACK:  # like except
             return
 
         thread = threading.Thread(target=self._recv_acks)
         thread.start()
 
         while self.is_running:
+
+            if self.is_stop:  # the client stop the download
+                self.is_running = False
+                print("Stop")
+                # close the socket
+                thread.join()  # wait for the thread finish
+                self.sock.close()
+                break
+
+            if self.is_pause:  # the client pause the download
+                continue
 
             lost_flag = False  # in order to know if we have lost packets
             count_success_in_window = 0
@@ -105,17 +118,27 @@ class Sender:
 
     def _recv_acks(self):
         while self.is_running:
-            inputs, o, e = select.select([self.sock], [], [], 0)
+            inputs, o, e = select.select([self.sock], [], [], 0)  # return if we have something to read when receive()
             if inputs:
                 msg, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)
-                seq_num, response_type = struct.unpack(packet.AckPacket.PACKET_FORMAT, msg)  # format, msg
+                seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, msg)  # format, msg
 
-                curr_packet = self.packets.get(seq_num)
-                if curr_packet:
-                    if response_type == packet.AckPacket.TYPE_ACK:
-                        curr_packet.is_finish = True
-                    elif response_type == packet.AckPacket.TYPE_NACK:
-                        curr_packet.nack = True
+                if response_type == packet.InfoPacket.TYPE_PAUSE:
+                    self.is_pause = True
+
+                elif response_type == packet.InfoPacket.TYPE_CONTINUE:
+                    self.is_pause = False
+
+                elif response_type == packet.InfoPacket.TYPE_STOP:
+                    self.is_stop = True
+
+                else:
+                    curr_packet = self.packets.get(seq_num)
+                    if curr_packet:
+                        if response_type == packet.InfoPacket.TYPE_ACK:
+                            curr_packet.is_finish = True
+                        elif response_type == packet.InfoPacket.TYPE_NACK:
+                            curr_packet.nack = True
 
 
 class Receiver:
@@ -124,30 +147,44 @@ class Receiver:
         self.port = port
         self.file_name = file_name
         self.sock = None
+        self.total_packets = 0
+        self.last_recv_packet = 0
+
+    def ask_for_pause(self):
+        data = packet.InfoPacket(0, packet.InfoPacket.TYPE_PAUSE).pack()  # create pause-packet
+        self.sock.sendto(data, (self.address, self.port))  # send the packet
+
+    def ask_for_continue(self):
+        data = packet.InfoPacket(0, packet.InfoPacket.TYPE_CONTINUE).pack()  # create continue-packet
+        self.sock.sendto(data, (self.address, self.port))  # send the packet
+
+    def ask_for_stop(self):
+        data = packet.InfoPacket(0, packet.InfoPacket.TYPE_STOP).pack()  # create stop-packet
+        self.sock.sendto(data, (self.address, self.port))  # send the packet
 
     def receive(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create udp socket for send to the server
         # Make handshake with the server (SYN SYNACK ACK)
-        data = packet.AckPacket(0, packet.AckPacket.TYPE_SYN).pack()  # create syn-packet
+        data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN).pack()  # create syn-packet
         self.sock.sendto(data, (self.address, self.port))  # send the packet
         received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive synack
-        seq_num, response_type = struct.unpack(packet.AckPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if response_type == packet.AckPacket.TYPE_SYN_ACK:  # like except
-            data = packet.AckPacket(0, packet.AckPacket.TYPE_ACK).pack()  # create ack packet
+        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
+        if response_type == packet.InfoPacket.TYPE_SYN_ACK:  # like except
+            data = packet.InfoPacket(0, packet.InfoPacket.TYPE_ACK).pack()  # create ack packet
             self.sock.sendto(data, (self.address, self.port))  # send the packet
         else:
             return False
 
-        last_recv_packet = -1  # seq_num of last packet that arrived
+        self.last_recv_packet = -1  # seq_num of last packet that arrived
         recv_jump_packets = {}  # packets with seq number that not follows the last seq_num (seq_num : data)
-        total_packets = 1
+        self.total_packets = 1
         f = open(self.file_name, "wb")  # write binary data
         last_4_bytes = ""
 
-        while last_recv_packet + 1 < total_packets:
+        while self.last_recv_packet + 1 < self.total_packets:
 
             received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # receive the data packet
-            seq_num, checksum, length, total_packets = struct.unpack(packet.DataPacket.PACKET_FORMAT, received_bytes[0:16])
+            seq_num, checksum, length, self.total_packets = struct.unpack(packet.DataPacket.PACKET_FORMAT, received_bytes[0:16])
             data = received_bytes[16:]  # takes the data part after the packet header
 
             ########## simulate packets fails ############
@@ -164,33 +201,33 @@ class Receiver:
             #  if the checksum incorrect
             if checksum != packet.calc_checksum(data):
                 # need to send nack
-                ack_pkt_data = packet.AckPacket(seq_num, packet.AckPacket.TYPE_NACK).pack()
+                ack_pkt_data = packet.InfoPacket(seq_num, packet.InfoPacket.TYPE_NACK).pack()
                 self.sock.sendto(ack_pkt_data, (self.address, self.port))
 
             # checksum correct:
             else:
                 # seq_num is continuous
-                if seq_num == last_recv_packet+1:  # all good
-                    ack_pkt_data = packet.AckPacket(seq_num, packet.AckPacket.TYPE_ACK).pack()
+                if seq_num == self.last_recv_packet+1:  # all good
+                    ack_pkt_data = packet.InfoPacket(seq_num, packet.InfoPacket.TYPE_ACK).pack()
                     self.sock.sendto(ack_pkt_data, (self.address, self.port))
                     f.write(data)
                     last_4_bytes = data[-4:]
-                    last_recv_packet = seq_num
+                    self.last_recv_packet = seq_num
 
-                    while recv_jump_packets.get(last_recv_packet+1) is not None:
-                        data = recv_jump_packets.pop(last_recv_packet+1)
+                    while recv_jump_packets.get(self.last_recv_packet+1) is not None:
+                        data = recv_jump_packets.pop(self.last_recv_packet+1)
                         f.write(data)
                         last_4_bytes = data[-4:]
-                        last_recv_packet = last_recv_packet + 1
+                        self.last_recv_packet = self.last_recv_packet + 1
                 else:
                     # add this to the dict
                     recv_jump_packets[seq_num] = data
-                    ack_pkt_data = packet.AckPacket(seq_num, packet.AckPacket.TYPE_ACK).pack()
+                    ack_pkt_data = packet.InfoPacket(seq_num, packet.InfoPacket.TYPE_ACK).pack()
                     self.sock.sendto(ack_pkt_data, (self.address, self.port))
 
                     # send nack for all packets from last_recv_packet+1 to seq_num-1
-                    for s in range(last_recv_packet+1, seq_num):
-                        ack_pkt_data = packet.AckPacket(s, packet.AckPacket.TYPE_NACK).pack()
+                    for s in range(self.last_recv_packet+1, seq_num):
+                        ack_pkt_data = packet.InfoPacket(s, packet.InfoPacket.TYPE_NACK).pack()
                         self.sock.sendto(ack_pkt_data, (self.address, self.port))
 
         f.close()  # close the file

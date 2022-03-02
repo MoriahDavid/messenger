@@ -103,11 +103,17 @@ class Gui:
         b.pack(side=LEFT)
         b.place(x=465, y=524)
 
-        pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
-        pause.pack(side=LEFT)
-        pause.config(width=2)
-        pause.place(x=540, y=524)
+        self.pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
+        self.pause.pack(side=LEFT)
+        self.pause.config(width=2)
+        self.pause.place(x=540, y=524)
         # u"\u25B6" play symb
+
+        self.stop = Button(self.root, text=u"\u23F9", command=self.pause_play_download)
+        self.stop.pack(side=LEFT)
+        self.stop.config(width=2)
+        self.stop.place(x=575, y=524)
+
 
     def update_files(self):
         pass

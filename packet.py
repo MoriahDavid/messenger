@@ -32,9 +32,9 @@ class DataPacket:
         return p
 
 
-class AckPacket:
+class InfoPacket:
     """
-    The packet that represents the ACK or NACK response.
+    The packet that represents info about packets response.
     """
     PACKET_FORMAT = "II"  # (seq_num, response_type)
 
@@ -42,6 +42,9 @@ class AckPacket:
     TYPE_NACK = 2
     TYPE_SYN = 3
     TYPE_SYN_ACK = 4
+    TYPE_PAUSE = 5
+    TYPE_CONTINUE = 6
+    TYPE_STOP = 7
 
     def __init__(self, seq_num, response_type):
         self.seq_num = seq_num
