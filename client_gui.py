@@ -14,10 +14,14 @@ class Gui:
         self.connected_clients = ["Everyone"]
         self.send_to = StringVar(self.root)
 
+        self.files_to_down = ["Files"]
+        self.to_download = StringVar(self.root)
+
         self.create_window()
 
         self.client = client
         self.client.set_gui_new_msg_function(self.show_msg_to_screen)
+
 
     def create_window(self):
         # msg screen
@@ -74,6 +78,46 @@ class Gui:
         self._login_btn.pack(side=LEFT)
         self._login_btn.place(x=415, y=37)
 
+        # files
+
+        # files button
+        # choose file to download
+        self.to_download.set(self.files_to_down[0])
+        self._drop_files = OptionMenu(self.root, self.to_download, *self.files_to_down)
+        self._drop_files.config(width=15)
+        self._drop_files.pack()
+        self._drop_files.place(x=70, y=521)
+
+        refresh = Button(self.root, text=u"\U0001F5D8", command=self.update_files)
+        refresh.pack(side=LEFT)
+        refresh.config(width=2)
+        refresh.place(x=50, y=524)
+
+        # save file path box
+        self._save_file_path = Entry(self.root, width=40)
+        self._save_file_path.pack(side=LEFT)
+        self._save_file_path.place(x=210, y=524)
+
+        # download button
+        b = Button(self.root, text='Download', command=self.download_file)
+        b.pack(side=LEFT)
+        b.place(x=465, y=524)
+
+        pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
+        pause.pack(side=LEFT)
+        pause.config(width=2)
+        pause.place(x=540, y=524)
+        # u"\u25B6" play symb
+
+    def update_files(self):
+        pass
+
+    def download_file(self):
+        pass
+
+    def pause_play_download(self):
+        pass
+
     def update_login_clients(self):
         if not self.client.is_connected:
             return
@@ -127,6 +171,7 @@ class Gui:
         self._msg_screen.config(state=NORMAL)
         self._msg_screen.insert(END, text)
         self._msg_screen.config(state=DISABLED)
+
 
     def run(self):
         self.root.mainloop()
