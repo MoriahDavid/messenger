@@ -1,5 +1,7 @@
+import os.path
 from tkinter import *
-from tkinter import _setit
+from tkinter import _setit, messagebox
+from tkinter.filedialog import asksaveasfilename
 
 import client
 import consts
@@ -16,6 +18,7 @@ class Gui:
 
         self.files_to_down = ["Files"]
         self.to_download = StringVar(self.root)
+        self.download_is_pause = False
 
         self.create_window()
 
@@ -94,35 +97,84 @@ class Gui:
         refresh.place(x=50, y=524)
 
         # save file path box
-        self._save_file_path = Entry(self.root, width=40)
+        self._save_file_path = Entry(self.root, width=30)
         self._save_file_path.pack(side=LEFT)
-        self._save_file_path.place(x=210, y=524)
+        self._save_file_path.place(x=270, y=524)
+        self._save_file_path.config(state='readonly')
 
+        b = Button(self.root, text="Save to..", command=self._choose_dest_file)
+        b.pack(side=LEFT)
+        b.place(x=210, y=524)
         # download button
         b = Button(self.root, text='Download', command=self.download_file)
         b.pack(side=LEFT)
         b.place(x=465, y=524)
 
-        self.pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
-        self.pause.pack(side=LEFT)
-        self.pause.config(width=2)
-        self.pause.place(x=540, y=524)
-        # u"\u25B6" play symb
+        self._pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
+        self._pause.pack(side=LEFT)
+        self._pause.config(width=2)
+        self._pause.place(x=540, y=524)
 
-        self.stop = Button(self.root, text=u"\u23F9", command=self.pause_play_download)
-        self.stop.pack(side=LEFT)
-        self.stop.config(width=2)
-        self.stop.place(x=575, y=524)
+        self._stop = Button(self.root, text=u"\u23F9", command=self.stop_download)
+        self._stop.pack(side=LEFT)
+        self._stop.config(width=2)
+        self._stop.place(x=575, y=524)
 
+    def _choose_dest_file(self):
+        if self.to_download.get() != "Files":
+            file = asksaveasfilename(initialdir='.', initialfile=self.to_download.get())
+
+            if file:
+                print(file)
+                self._save_file_path.config(state=NORMAL)
+                self._save_file_path.delete(0, 'end')
+                self._save_file_path.insert(0, file)
+                self._save_file_path.config(state='readonly')
 
     def update_files(self):
-        pass
+        if not self.client.is_connected:
+            return
+
+        all_files = self.client.get_all_files()
+        self.files_to_down = []
+        if not all_files:
+            return
+        self.files_to_down.extend(all_files)
+        self._drop_files["menu"].delete(0, "end")
+
+        for f in self.files_to_down:
+            self._drop_files["menu"].add_command(label=f, command=_setit(self.to_download, f))
 
     def download_file(self):
-        pass
+        save_to = self._save_file_path.get()
+
+        if self.client.is_downloading or self.to_download.get() == "Files" or not save_to:
+            return
+
+        self.download_is_pause = False
+
+        self.client.file_download(self.to_download.get(), save_to)
 
     def pause_play_download(self):
-        pass
+        if not self.client.is_downloading:
+            return
+
+        if self.download_is_pause:
+            self.client.continue_download()
+            self._pause.config(text=u"\u23F8")
+            self.download_is_pause = False
+        else:
+            self.client.pause_download()
+            self._pause.config(text=u"\u25B6")
+            self.download_is_pause = True
+
+    def stop_download(self):
+        if not self.client.is_downloading:
+            return
+
+        self.client.stop_download()
+        self._pause.config(text=u"\u23F8")
+        self.download_is_pause = False
 
     def update_login_clients(self):
         if not self.client.is_connected:
@@ -142,10 +194,20 @@ class Gui:
         if not self.client.is_connected:
             username = self._username.get()
             address = self._address.get()
-            if self.client.connect(username, address, consts.SERVER_PORT):
+            if not address:
+                messagebox.showerror("Login error", f"Enter valid server address")
+                return
+            if not username:
+                messagebox.showerror("Login error", f"Enter username")
+                return
+
+            r = self.client.connect(username, address, consts.SERVER_PORT)
+            if r == True:
                 self._username.config(state=DISABLED)
                 self._address.config(state=DISABLED)
                 self._login_btn.config(text="Logout")
+            else:
+                messagebox.showerror("Login error", f"Can't login.\nServer msg:'{r}'")
         else:
             self.client.disconnect()
             self._username.config(state=NORMAL)
@@ -178,12 +240,5 @@ class Gui:
         self._msg_screen.insert(END, text)
         self._msg_screen.config(state=DISABLED)
 
-
     def run(self):
         self.root.mainloop()
-
-
-if __name__ == '__main__':
-    c = client.Client()
-    g = Gui(c)
-    g.run()

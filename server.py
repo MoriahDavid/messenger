@@ -33,7 +33,7 @@ class Server:
 
     def get_available_port(self):
         first_port = None
-        for port_num, is_available in self.available_ports:
+        for port_num, is_available in self.available_ports.items()  :
             if is_available:
                 first_port = port_num
                 self.available_ports[port_num] = False
@@ -55,7 +55,7 @@ class Server:
             if d.get(MsgKeys.TYPE) == MsgTypes.CONNECT:
                 username = d.get(MsgKeys.USERNAME)
                 #  check if the username already exist
-                if self.clients_uname_sock.get(username) is not None:
+                if self.clients_uname_sock.get(username) is not None or username == consts.SERVER_PREFIX_MSG:
                     d = {MsgKeys.TYPE: MsgTypes.CONNECT_RESPONSE, MsgKeys.STATUS: False,
                          MsgKeys.MSG: "username already exist"}
                     client_socket.send(common.pack_json(d))
@@ -85,8 +85,13 @@ class Server:
                     #  catch exception if the client close without disconnect (The socket closed)
                     try:
                         # read the int (represent the packet size) with unpack func.
-                        msg_size = struct.unpack("I", client_sock.recv(4))[0]
-                        data = client_sock.recv(msg_size)
+                        recv_buff = client_sock.recv(4)
+                        if not recv_buff:
+                            self.disconnect_client(client_sock)
+                            continue
+                        else:
+                            msg_size = struct.unpack("I", recv_buff)[0]
+                            data = client_sock.recv(msg_size)
                     except ConnectionResetError:
                         self.disconnect_client(client_sock)
                         continue
@@ -109,7 +114,7 @@ class Server:
         file_name = d.get(MsgKeys.MSG)
 
         port = self.get_available_port()
-        if port is None or not os.path.exists(file_name):  # there is not available port or the file is not exist
+        if port is None or not os.path.exists(os.path.join(consts.FILES_FOLDER_NAME, file_name)):  # there is not available port or the file is not exist
             # cant download file
             d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: False, MsgKeys.MSG: "Not Available"}
             client_socket.send(common.pack_json(d))  # sent to client socket
@@ -118,7 +123,7 @@ class Server:
         sender = Sender(port)
 
         # Read the content of the file
-        with open(file_name, "rb") as f:
+        with open(os.path.join(consts.FILES_FOLDER_NAME, file_name), "rb") as f:
             data = f.read()
 
         sender.create_packets(data)
@@ -127,7 +132,7 @@ class Server:
         d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: True, MsgKeys.MSG: port}
         client_socket.send(common.pack_json(d))  # sent to client socket
         sender.send()
-
+        print("finish sending file")
         # finally make the port available again
         self.available_ports[port] = True
 
@@ -150,7 +155,7 @@ class Server:
         self.send_msg_to_all_clients(f"{disconnect_username} disconnected")
 
     def send_msg_to_all_clients(self, msg):
-        d = {MsgKeys.TYPE: MsgTypes.SEND_MSG, MsgKeys.MSG: msg, MsgKeys.FROM: "Server"}
+        d = {MsgKeys.TYPE: MsgTypes.SEND_MSG, MsgKeys.MSG: msg, MsgKeys.FROM: consts.SERVER_PREFIX_MSG}
         socks = list(self.clients_uname_sock.values())  # all sockets of all clients
 
         for sock in socks:

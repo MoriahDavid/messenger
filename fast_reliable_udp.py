@@ -21,6 +21,8 @@ class Sender:
     def create_packets(self, data: bytes):
         data_len = len(data)
         packets_amount = int(data_len/consts.MAX_PACKET_DATA_SIZE)
+        if data_len % consts.MAX_PACKET_DATA_SIZE != 0:
+            packets_amount = packets_amount + 1
         # creates the packets and put it in the packets dict
         for packet_seq in range(packets_amount):
             part_data = data[packet_seq*consts.MAX_PACKET_DATA_SIZE: (packet_seq+1)*consts.MAX_PACKET_DATA_SIZE]
@@ -34,24 +36,57 @@ class Sender:
         self.is_running = True
         window_size = 1
         window_start_packet = 0
-        self.sock.bind(("", self.port))  # relates this socket  to all networks and port
+        self.sock.bind(("", self.port))  # relates this socket to all networks and port
 
-        received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive syn
-        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if response_type == packet.InfoPacket.TYPE_SYN:  # like except
-            data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN_ACK).pack()  # create synack packet
-            self.sock.sendto(data, address)  # send the packet
-        else:
-            return
-        received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive ack
-        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if not response_type == packet.InfoPacket.TYPE_ACK:  # like except
+        # start the HANDSHAKE with the receiver
+        # the handshake give 10 times for packet lost. else --> stop the running.
+        # sender: server wait for syn message and then for ack message.
+        # if there is packet loss (no-response from the receiver), server sends again the prev msg.
+        counter = 0
+        wait_for = "syn"
+        address = None
+        while counter < 10:
+            inputs, outputs, err = select.select([self.sock], [], [], 5)
+            ########## simulate packets fails ############
+            if consts.SIMULATE_PACKETS_LOST:
+                rand_number = random.randint(0, 10)
+                if inputs and rand_number % 3 == 0:  # miss the packet
+                    self.sock.recvfrom(consts.UDP_BUFF_SIZE)
+                    print("Drop handshake packet")
+                    inputs = []
+            #############################################
+            if not inputs:
+                counter = counter + 1
+                if wait_for == "syn":
+                    continue
+                elif wait_for == "ack":
+                    data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN_ACK).pack()  # create synack packet
+                    self.sock.sendto(data, address)  # send the packet
+            else:
+                received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # receive the message (syn/ack)
+                seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
+                if response_type == packet.InfoPacket.TYPE_SYN and wait_for == "syn":  # like except
+                    data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN_ACK).pack()  # create synack packet
+                    self.sock.sendto(data, address)  # send the packet
+                    wait_for = "ack"
+                elif response_type == packet.InfoPacket.TYPE_ACK and wait_for == "ack":
+                    break
+
+        if counter == 10:
             return
 
         thread = threading.Thread(target=self._recv_acks)
         thread.start()
 
         while self.is_running:
+
+            if window_start_packet >= len(self.packets):
+                self.is_running = False
+                print("All packets sent successfully")
+                # close the socket
+                thread.join()  # wait for the thread finish
+                self.sock.close()
+                break
 
             if self.is_stop:  # the client stop the download
                 self.is_running = False
@@ -66,9 +101,12 @@ class Sender:
 
             lost_flag = False  # in order to know if we have lost packets
             count_success_in_window = 0
+            count_in_window = 0
             for packet_seq in range(window_start_packet, window_start_packet + window_size):
                 if self.packets.get(packet_seq) is None:
                     break
+
+                count_in_window = count_in_window + 1
 
                 if self.packets[packet_seq].is_finish:  # packet got ack
                     count_success_in_window = count_success_in_window + 1
@@ -88,6 +126,7 @@ class Sender:
                     data_to_send = self.packets[packet_seq].pack()  # pack the data of packet for sending
                     self.sock.sendto(data_to_send, address)  # data, tuple(address(ip), port)
                     self.packets[packet_seq].send_time = time.time()  # save the current time
+                    self.packets[packet_seq].nack = False
                     print(f"packet ({packet_seq}) sent again.")
 
             if lost_flag:  # cut the window
@@ -96,7 +135,7 @@ class Sender:
                     print(f"decrease window size to {window_size}")
                 if self.packets[window_start_packet].is_finish:
                     window_start_packet = window_start_packet + 1
-            elif count_success_in_window == window_size:  # finish all packets in window-> move & make the window bigger
+            elif count_success_in_window == count_in_window:  # finish all packets in window-> move & make the window bigger
                 if window_start_packet + window_size >= len(self.packets):
                     self.is_running = False
                     print("All packets sent successfully")
@@ -119,16 +158,23 @@ class Sender:
         while self.is_running:
             inputs, o, e = select.select([self.sock], [], [], 0)  # return if we have something to read when receive()
             if inputs:
-                msg, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)
+                try:
+                    msg, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)
+                except ConnectionResetError:
+                    continue
+
                 seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, msg)  # format, msg
 
                 if response_type == packet.InfoPacket.TYPE_PAUSE:
+                    print("Pause sending")
                     self.is_pause = True
 
                 elif response_type == packet.InfoPacket.TYPE_CONTINUE:
+                    print("Continue sending")
                     self.is_pause = False
 
                 elif response_type == packet.InfoPacket.TYPE_STOP:
+                    print("Stop sending")
                     self.is_stop = True
 
                 else:
@@ -142,6 +188,7 @@ class Sender:
 
 class Receiver:
     def __init__(self, address, port, file_name):
+        self.is_downloading = True
         self.address = address
         self.port = port
         self.file_name = file_name
@@ -160,19 +207,45 @@ class Receiver:
     def ask_for_stop(self):
         data = packet.InfoPacket(0, packet.InfoPacket.TYPE_STOP).pack()  # create stop-packet
         self.sock.sendto(data, (self.address, self.port))  # send the packet
+        self.is_downloading = False
 
     def receive(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create udp socket for send to the server
         # Make handshake with the server (SYN SYNACK ACK)
         data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN).pack()  # create syn-packet
         self.sock.sendto(data, (self.address, self.port))  # send the packet
-        received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # wait for receive synack
-        seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT, received_bytes)  # unpack the packet
-        if response_type == packet.InfoPacket.TYPE_SYN_ACK:  # like except
-            data = packet.InfoPacket(0, packet.InfoPacket.TYPE_ACK).pack()  # create ack packet
-            self.sock.sendto(data, (self.address, self.port))  # send the packet
-        else:
-            return False
+        counter = 0
+        wait_for = "synack"
+        address = None
+        first_data_packet_bytes = None
+        while counter < 10:
+            inputs, outputs, err = select.select([self.sock], [], [], 5)
+            ########## simulate packets fails ############
+            if consts.SIMULATE_PACKETS_LOST:
+                rand_number = random.randint(0, 10)
+                if inputs and rand_number % 3 == 0:  # miss the packet
+                    self.sock.recvfrom(consts.UDP_BUFF_SIZE)
+                    print("Drop handshake packet")
+                    inputs = []
+            #############################################
+            if not inputs:
+                counter = counter + 1
+                if wait_for == "synack":
+                    data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN).pack()  # create syn-packet
+                    self.sock.sendto(data, (self.address, self.port))  # send the packet
+                elif wait_for == "data":
+                    data = packet.InfoPacket(0, packet.InfoPacket.TYPE_ACK).pack()  # create ack packet
+                    self.sock.sendto(data, address)  # send the packet
+            else:
+                received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # receive the message (synack/data)
+                if len(received_bytes) > 8 and wait_for == "data":  # got data packet(good) --> end of handshake
+                    first_data_packet_bytes = received_bytes
+                    break
+                seq_num, response_type = struct.unpack(packet.InfoPacket.PACKET_FORMAT,received_bytes)  # unpack the packet
+                if response_type == packet.InfoPacket.TYPE_SYN_ACK and wait_for == "synack":  # like except
+                    data = packet.InfoPacket(0, packet.InfoPacket.TYPE_ACK).pack()  # create ack packet
+                    self.sock.sendto(data, address)  # send the packet
+                    wait_for = "data"
 
         self.last_recv_packet = -1  # seq_num of last packet that arrived
         recv_jump_packets = {}  # packets with seq number that not follows the last seq_num (seq_num : data)
@@ -180,9 +253,15 @@ class Receiver:
         f = open(self.file_name, "wb")  # write binary data
         last_4_bytes = ""
 
-        while self.last_recv_packet + 1 < self.total_packets:
-
-            received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # receive the data packet
+        while self.last_recv_packet + 1 < self.total_packets and self.is_downloading:
+            inputs, o, e = select.select([self.sock], [], [], 1)  # return if we have something to read when receive()
+            if not inputs and first_data_packet_bytes is None:
+                continue
+            if first_data_packet_bytes is None:
+                received_bytes, address = self.sock.recvfrom(consts.UDP_BUFF_SIZE)  # receive the data packet
+            else:
+                received_bytes = first_data_packet_bytes
+                first_data_packet_bytes = None
             seq_num, checksum, length, self.total_packets = struct.unpack(packet.DataPacket.PACKET_FORMAT, received_bytes[0:16])
             data = received_bytes[16:]  # takes the data part after the packet header
 
@@ -231,7 +310,10 @@ class Receiver:
 
         f.close()  # close the file
         self.sock.close()  # close the socket
+        if self.last_recv_packet + 1 == self.total_packets:
+            print("All packets received successfully")
 
+        print(f"last 4 received bytes ({last_4_bytes})")
         return last_4_bytes
 
 

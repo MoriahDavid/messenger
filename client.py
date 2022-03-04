@@ -22,6 +22,7 @@ class Client:
         self._download_file_response = None
         self._all_files = None
         self.receiver = None
+        self.is_downloading = False
 
     def _listen_to_server_req(self):
         while self.is_connected:
@@ -39,7 +40,7 @@ class Client:
                 elif r_type == MsgTypes.GET_ALL_CLIENTS_RESPONSE:
                     self._all_clients = d.get(MsgKeys.MSG)
                 elif r_type == MsgTypes.GET_ALL_FILES_RESPONSE:
-                    self._all_clients = d.get(MsgKeys.MSG)
+                    self._all_files = d.get(MsgKeys.MSG)
                 elif r_type == MsgTypes.FILE_DOWNLOAD_RESPONSE:
                     self._download_file_response = d
 
@@ -65,8 +66,8 @@ class Client:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((server_ip, server_port))  # connect to the server
             self.server_ip = server_ip
-        except ConnectionRefusedError:
-            return False
+        except (ConnectionRefusedError, TimeoutError, socket.gaierror):
+            return "Server is not running"
 
         d = {MsgKeys.TYPE: MsgTypes.CONNECT, MsgKeys.USERNAME: username}  # create dict (JSON) to the msg
         self.sock.sendall(common.pack_json(d))  # send the msg by change the JSON to string
@@ -84,9 +85,12 @@ class Client:
             else:
                 print(d.get(MsgKeys.MSG))
                 self.sock.close()
-                return False
+                return d.get(MsgKeys.MSG)
 
     def disconnect(self):
+        if self.is_downloading:
+            self.receiver.ask_for_stop()
+
         d = {MsgKeys.TYPE: MsgTypes.DISCONNECT}
         self.is_connected = False
         self.sock.sendall(common.pack_json(d))
@@ -129,33 +133,43 @@ class Client:
             time.sleep(0.1)
         r = self._download_file_response
         self._download_file_response = None
-        if not r.get(MsgKeys.STATUS):
+        if r is None or not r.get(MsgKeys.STATUS):
+            print("Cant download")
             pass  # TODO: cant download
         else:
             port = r.get(MsgKeys.MSG)
             self.receiver = Receiver(self.server_ip, port, save_to)
-            self.receiver.receive()  # TODO: print return value to the screen
+            # do the download in thread
+            download_thread = threading.Thread(target=self._run_receive_func)
+            download_thread.start()
+            return True
+
+    def _run_receive_func(self):
+        self.is_downloading = True
+        time.sleep(1)
+        self.receiver.receive()
+
+        self.is_downloading = False
 
     def pause_download(self):
-        if self.receiver:
+        if self.receiver and self.is_downloading:
             self.receiver.ask_for_pause()
 
     def continue_download(self):
-        if self.receiver:
+        if self.receiver and self.is_downloading:
             self.receiver.ask_for_continue()
 
     def stop_download(self):
-        if self.receiver:
+        if self.receiver and self.is_downloading:
             self.receiver.ask_for_stop()
+            self.is_downloading = False
 
 
 def main():
+    from client_gui import Gui
     client = Client()
-    client.connect("moriah", "127.0.0.1", consts.SERVER_PORT)
-    client.send_msg("hey")
-    print(client.get_all_clients())
-    print(client.get_all_clients())
-
+    g = Gui(client)
+    g.run()
 
 
 if __name__ == "__main__":
