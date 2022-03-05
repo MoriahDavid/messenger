@@ -67,7 +67,7 @@ class Gui:
         refresh.place(x=50, y=478 if is_linux else 480)
 
         # login username text box
-        lbl = Label(self.root, text="Username:", font=("Arial", 10), bg='lavender')
+        lbl = Label(self.root, text="Username:", font=("Arial", 12 if is_linux else 10), bg='lavender')
         lbl.pack(side=LEFT)
         lbl.place(x=50, y=15)
         self._username = Entry(self.root, width=16 if is_linux else 20)
@@ -75,7 +75,7 @@ class Gui:
         self._username.place(x=50, y=40)
 
         # login address text box
-        lbl = Label(self.root, text="Address:", font=("Arial", 10), bg='lavender')
+        lbl = Label(self.root, text="Address:", font=("Arial", 12 if is_linux else 10), bg='lavender')
         lbl.pack(side=LEFT)
         lbl.place(x=200, y=15)
         self._address = Entry(self.root, width=25 if is_linux else 34)
