@@ -28,6 +28,11 @@ class Gui:
 
 
     def create_window(self):
+
+        is_linux = False
+        if sys.platform == 'linux':
+            is_linux = True
+
         # msg screen
         f = Frame(self.root)
         f.place(x=50, y=80)
@@ -39,7 +44,7 @@ class Gui:
         self._msg_screen.config(state=DISABLED)
 
         # text box
-        self._text_msg = Entry(self.root, width=60)
+        self._text_msg = Entry(self.root, width=(40 if is_linux else 60))
         self._text_msg.pack(side=LEFT)
         self._text_msg.place(x=210, y=480)
         self._text_msg.bind('<Return>', self.send_msg_enter)
@@ -58,7 +63,7 @@ class Gui:
 
         refresh = Button(self.root, text=u"\U0001F5D8", command=self.update_login_clients)
         refresh.pack(side=LEFT)
-        refresh.config(width=2)
+        refresh.config(width=1 if is_linux else 2)
         refresh.place(x=50, y=480)
 
         # login username text box
