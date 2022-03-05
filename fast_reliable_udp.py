@@ -188,7 +188,7 @@ class Sender:
 
 class Receiver:
     def __init__(self, address, port, file_name):
-        self.is_downloading = True
+        self.is_downloading = False
         self.address = address
         self.port = port
         self.file_name = file_name
@@ -210,6 +210,7 @@ class Receiver:
         self.is_downloading = False
 
     def receive(self):
+        self.is_downloading = True
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create udp socket for send to the server
         # Make handshake with the server (SYN SYNACK ACK)
         data = packet.InfoPacket(0, packet.InfoPacket.TYPE_SYN).pack()  # create syn-packet
