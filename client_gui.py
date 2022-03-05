@@ -37,40 +37,40 @@ class Gui:
         f = Frame(self.root)
         f.place(x=50, y=80)
         scrollbar = Scrollbar(f)
-        self._msg_screen = Text(f, height=24, width=70, yscrollcommand=scrollbar.set)
+        self._msg_screen = Text(f, height=(22 if is_linux else 24), width=70, yscrollcommand=scrollbar.set)
         scrollbar.config(command=self._msg_screen.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
         self._msg_screen.pack(side=LEFT)
         self._msg_screen.config(state=DISABLED)
 
         # text box
-        self._text_msg = Entry(self.root, width=(40 if is_linux else 60))
+        self._text_msg = Entry(self.root, width=(37 if is_linux else 60))
         self._text_msg.pack(side=LEFT)
-        self._text_msg.place(x=210, y=480)
+        self._text_msg.place(x=240 if is_linux else 210, y=480)
         self._text_msg.bind('<Return>', self.send_msg_enter)
 
         # sending button
         b = Button(self.root, text='send', command=self.send_msg)
         b.pack(side=LEFT)
-        b.place(x=580, y=477)
+        b.place(x=560 if is_linux else 580, y=477)
 
         # choose user to send message
         self.send_to.set(self.connected_clients[0])
         self._drop = OptionMenu(self.root, self.send_to, *self.connected_clients)
-        self._drop.config(width=15)
+        self._drop.config(width=13 if is_linux else 15)
         self._drop.pack()
-        self._drop.place(x=70, y=477)
+        self._drop.place(x=85 if is_linux else 70, y=477)
 
         refresh = Button(self.root, text=u"\U0001F5D8", command=self.update_login_clients)
         refresh.pack(side=LEFT)
         refresh.config(width=1 if is_linux else 2)
-        refresh.place(x=50, y=480)
+        refresh.place(x=50, y=478 if is_linux else 480)
 
         # login username text box
         lbl = Label(self.root, text="Username:", font=("Arial", 10), bg='lavender')
         lbl.pack(side=LEFT)
         lbl.place(x=50, y=15)
-        self._username = Entry(self.root, width=20)
+        self._username = Entry(self.root, width=16 if is_linux else 20)
         self._username.pack(side=LEFT)
         self._username.place(x=50, y=40)
 
@@ -78,7 +78,7 @@ class Gui:
         lbl = Label(self.root, text="Address:", font=("Arial", 10), bg='lavender')
         lbl.pack(side=LEFT)
         lbl.place(x=200, y=15)
-        self._address = Entry(self.root, width=34)
+        self._address = Entry(self.root, width=25 if is_linux else 34)
         self._address.pack(side=LEFT)
         self._address.place(x=200, y=40)
 
@@ -93,24 +93,24 @@ class Gui:
         # choose file to download
         self.to_download.set(self.files_to_down[0])
         self._drop_files = OptionMenu(self.root, self.to_download, *self.files_to_down)
-        self._drop_files.config(width=15)
+        self._drop_files.config(width=7 if is_linux else 15)
         self._drop_files.pack()
-        self._drop_files.place(x=70, y=521)
+        self._drop_files.place(x=85 if is_linux else 70, y=523 if is_linux else 521)
 
         refresh = Button(self.root, text=u"\U0001F5D8", command=self.update_files)
         refresh.pack(side=LEFT)
-        refresh.config(width=2)
-        refresh.place(x=50, y=524)
+        refresh.config(width=1 if is_linux else 2)
+        refresh.place(x=50, y=524 if is_linux else 524)
 
         # save file path box
-        self._save_file_path = Entry(self.root, width=30)
+        self._save_file_path = Entry(self.root, width=22 if is_linux else 30)
         self._save_file_path.pack(side=LEFT)
-        self._save_file_path.place(x=270, y=524)
+        self._save_file_path.place(x=275 if is_linux else 270, y=529 if is_linux else 524)
         self._save_file_path.config(state='readonly')
 
         b = Button(self.root, text="Save to..", command=self._choose_dest_file)
         b.pack(side=LEFT)
-        b.place(x=210, y=524)
+        b.place(x=187 if is_linux else 210, y=524)
         # download button
         b = Button(self.root, text='Download', command=self.download_file)
         b.pack(side=LEFT)
@@ -118,13 +118,13 @@ class Gui:
 
         self._pause = Button(self.root, text=u"\u23F8", command=self.pause_play_download)
         self._pause.pack(side=LEFT)
-        self._pause.config(width=2)
-        self._pause.place(x=540, y=524)
+        self._pause.config(width=1 if is_linux else 2)
+        self._pause.place(x=555 if is_linux else 540, y=524)
 
         self._stop = Button(self.root, text=u"\u23F9", command=self.stop_download)
         self._stop.pack(side=LEFT)
-        self._stop.config(width=2)
-        self._stop.place(x=575, y=524)
+        self._stop.config(width=1 if is_linux else 2)
+        self._stop.place(x=590 if is_linux else 575, y=524)
 
     def _choose_dest_file(self):
         if self.to_download.get() != "Files":
