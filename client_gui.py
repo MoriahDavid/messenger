@@ -12,6 +12,7 @@ class Gui:
         self.root = Tk()
         self.root.wm_title("Messenger")
         self.root.geometry("670x600")  # set windows size
+        self.root.configure(bg='lavender')
         self.root.resizable(False, False)  # disable windows change size
         self.connected_clients = ["Everyone"]
         self.send_to = StringVar(self.root)
