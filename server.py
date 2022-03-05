@@ -33,8 +33,10 @@ class Server:
 
         try:
             thread_clients_req.join()
-            thread_new_clients.join()
-        except Exception:
+            if thread_new_clients.is_alive():
+                thread_new_clients.join()
+
+        finally:
             print("Close the server socket")
             self.sock.close()
 
