@@ -8,7 +8,7 @@ import time
 from consts import MsgTypes, MsgKeys
 from fast_reliable_udp import Receiver
 import consts
-import common
+import packet
 
 
 class Client:
@@ -70,7 +70,7 @@ class Client:
             return "Server is not running"
 
         d = {MsgKeys.TYPE: MsgTypes.CONNECT, MsgKeys.USERNAME: username}  # create dict (JSON) to the msg
-        self.sock.sendall(common.pack_json(d))  # send the msg by change the JSON to string
+        self.sock.sendall(packet.pack_json(d))  # send the msg by change the JSON to string
         # read the int (represent the packet size) with unpack func.
         msg_size = struct.unpack("I", self.sock.recv(4))[0]
         m = self.sock.recv(msg_size)
@@ -93,21 +93,21 @@ class Client:
 
         d = {MsgKeys.TYPE: MsgTypes.DISCONNECT}
         self.is_connected = False
-        self.sock.sendall(common.pack_json(d))
+        self.sock.sendall(packet.pack_json(d))
         self.sock.close()
 
     def send_msg(self, msg, to=None):
         d = {MsgKeys.TYPE: MsgTypes.SEND_MSG, MsgKeys.MSG: msg}
         if to:
             d[MsgKeys.TO] = to
-        self.sock.sendall(common.pack_json(d))
+        self.sock.sendall(packet.pack_json(d))
 
     def get_all_clients(self):
         """
         :return: the list of all connected clients or None in timeout
         """
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_CLIENTS}
-        self.sock.sendall(common.pack_json(d))
+        self.sock.sendall(packet.pack_json(d))
         st = time.time()
         while self._all_clients is None and time.time() - st <= consts.RESPONSE_TIMEOUT:
             time.sleep(0.1)
@@ -117,7 +117,7 @@ class Client:
 
     def get_all_files(self):
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_FILES}
-        self.sock.sendall(common.pack_json(d))
+        self.sock.sendall(packet.pack_json(d))
         st = time.time()
         while self._all_files is None and time.time() - st <= consts.RESPONSE_TIMEOUT:
             time.sleep(0.1)
@@ -127,7 +127,7 @@ class Client:
 
     def file_download(self, file_name, save_to):
         d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD, MsgKeys.MSG: file_name}
-        self.sock.sendall(common.pack_json(d))
+        self.sock.sendall(packet.pack_json(d))
         st = time.time()
         while self._download_file_response is None and time.time() - st <= consts.RESPONSE_TIMEOUT:
             time.sleep(0.1)
@@ -174,4 +174,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

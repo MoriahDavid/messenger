@@ -8,8 +8,8 @@ import threading
 
 from consts import MsgTypes, MsgKeys
 import consts
-import common
 from fast_reliable_udp import Sender
+import packet
 
 
 class Server:
@@ -37,6 +37,7 @@ class Server:
                 thread_new_clients.join()
 
         finally:
+            self.is_running = False
             print("Close the server socket")
             self.sock.close()
 
@@ -67,18 +68,18 @@ class Server:
                 if self.clients_uname_sock.get(username) is not None or username == consts.SERVER_PREFIX_MSG:
                     d = {MsgKeys.TYPE: MsgTypes.CONNECT_RESPONSE, MsgKeys.STATUS: False,
                          MsgKeys.MSG: "username already exist"}
-                    client_socket.send(common.pack_json(d))
+                    client_socket.send(packet.pack_json(d))
                     client_socket.close()
                 #  check the username length
                 elif len(username) > consts.USERNAME_LEN:
                     d = {MsgKeys.TYPE: MsgTypes.CONNECT_RESPONSE, MsgKeys.STATUS: False,
                          MsgKeys.MSG: "username too long"}
-                    client_socket.send(common.pack_json(d))
+                    client_socket.send(packet.pack_json(d))
                     client_socket.close()
                 else:
                     # if the username good, put this client in the clients-socket dict
                     d = {MsgKeys.TYPE: MsgTypes.CONNECT_RESPONSE, MsgKeys.STATUS: True}
-                    client_socket.send(common.pack_json(d))
+                    client_socket.send(packet.pack_json(d))
                     self.clients_uname_sock[username] = client_socket
                     print(f"{username} connected")
                     self.send_msg_to_all_clients(f"{username} connected")
@@ -126,7 +127,7 @@ class Server:
         if port is None or not os.path.exists(os.path.join(consts.FILES_FOLDER_NAME, file_name)):  # there is not available port or the file is not exist
             # cant download file
             d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: False, MsgKeys.MSG: "Not Available"}
-            client_socket.send(common.pack_json(d))  # sent to client socket
+            client_socket.send(packet.pack_json(d))  # sent to client socket
             return
 
         sender = Sender(port)
@@ -139,7 +140,7 @@ class Server:
 
         # send to the client response with the port number
         d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: True, MsgKeys.MSG: port}
-        client_socket.send(common.pack_json(d))  # sent to client socket
+        client_socket.send(packet.pack_json(d))  # sent to client socket
         sender.send()
         print("finish sending file")
         # finally make the port available again
@@ -148,7 +149,7 @@ class Server:
     def get_all_files(self, client_socket):
         files_names = os.listdir(consts.FILES_FOLDER_NAME)
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_FILES_RESPONSE, MsgKeys.MSG: files_names}
-        client_socket.send(common.pack_json(d))  # sent to client socket- all files
+        client_socket.send(packet.pack_json(d))  # sent to client socket- all files
 
     # disconnect
     def disconnect_client(self, client_socket):
@@ -157,7 +158,7 @@ class Server:
         self.clients_uname_sock.pop(disconnect_username)
         d = {MsgKeys.TYPE: MsgTypes.DISCONNECT_RESPONSE, MsgKeys.STATUS: True}
         try:
-            client_socket.send(common.pack_json(d))
+            client_socket.send(packet.pack_json(d))
         except ConnectionResetError:
             pass
         client_socket.close()
@@ -168,7 +169,7 @@ class Server:
         socks = list(self.clients_uname_sock.values())  # all sockets of all clients
 
         for sock in socks:
-            sock.send(common.pack_json(d))
+            sock.send(packet.pack_json(d))
 
     def send_msg(self, d, sender_socket):
         to = d.get(MsgKeys.TO)
@@ -183,7 +184,7 @@ class Server:
 
         for sock in socks:
             if sock is not None:
-                sock.send(common.pack_json(d))
+                sock.send(packet.pack_json(d))
 
     def get_username_by_socket(self, value):
         for k in self.clients_uname_sock.keys():
@@ -193,7 +194,7 @@ class Server:
     def get_all_clients(self, sender_socket):
         all_clients = list(self.clients_uname_sock.keys())
         d = {MsgKeys.TYPE: MsgTypes.GET_ALL_CLIENTS_RESPONSE, MsgKeys.MSG: all_clients}
-        sender_socket.send(common.pack_json(d))
+        sender_socket.send(packet.pack_json(d))
 
 
 
