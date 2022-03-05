@@ -31,6 +31,13 @@ class Server:
         thread_clients_req = threading.Thread(target=self._listen_to_clients_req)
         thread_clients_req.start()
 
+        try:
+            thread_clients_req.join()
+            thread_new_clients.join()
+        except Exception:
+            print("Close the server socket")
+            self.sock.close()
+
     def get_available_port(self):
         first_port = None
         for port_num, is_available in self.available_ports.items()  :
