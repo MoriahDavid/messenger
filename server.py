@@ -173,7 +173,8 @@ class Server:
             socks.remove(sender_socket)
 
         for sock in socks:
-            sock.send(common.pack_json(d))
+            if sock is not None:
+                sock.send(common.pack_json(d))
 
     def get_username_by_socket(self, value):
         for k in self.clients_uname_sock.keys():
