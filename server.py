@@ -43,7 +43,7 @@ class Server:
 
     def get_available_port(self):
         first_port = None
-        for port_num, is_available in self.available_ports.items()  :
+        for port_num, is_available in self.available_ports.items():
             if is_available:
                 first_port = port_num
                 self.available_ports[port_num] = False
@@ -124,7 +124,8 @@ class Server:
         file_name = d.get(MsgKeys.MSG)
 
         port = self.get_available_port()
-        if port is None or not os.path.exists(os.path.join(consts.FILES_FOLDER_NAME, file_name)):  # there is not available port or the file is not exist
+        # there is not available port or the file is not exist
+        if port is None or not os.path.exists(os.path.join(consts.FILES_FOLDER_NAME, file_name)):
             # cant download file
             d = {MsgKeys.TYPE: MsgTypes.FILE_DOWNLOAD_RESPONSE, MsgKeys.STATUS: False, MsgKeys.MSG: "Not Available"}
             client_socket.send(packet.pack_json(d))  # sent to client socket
@@ -197,8 +198,6 @@ class Server:
         sender_socket.send(packet.pack_json(d))
 
 
-
-
 def main():
     server = Server(consts.SERVER_PORT)
     server.run()
@@ -206,4 +205,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

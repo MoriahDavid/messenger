@@ -135,7 +135,7 @@ class Client:
         self._download_file_response = None
         if r is None or not r.get(MsgKeys.STATUS):
             print("Cant download")
-            pass  # TODO: cant download
+            return False
         else:
             port = r.get(MsgKeys.MSG)
             self.receiver = Receiver(self.server_ip, port, save_to)

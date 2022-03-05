@@ -3,7 +3,6 @@ from tkinter import *
 from tkinter import _setit, messagebox
 from tkinter.filedialog import asksaveasfilename
 
-import client
 import consts
 
 
@@ -25,7 +24,6 @@ class Gui:
 
         self.client = client
         self.client.set_gui_new_msg_function(self.show_msg_to_screen)
-
 
     def create_window(self):
 
@@ -87,7 +85,7 @@ class Gui:
         self._login_btn.pack(side=LEFT)
         self._login_btn.place(x=415, y=37)
 
-        # files
+        # files:
 
         # files button
         # choose file to download
